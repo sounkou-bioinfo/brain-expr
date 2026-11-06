@@ -1,6 +1,5 @@
 build/
-data/raw/*.loom
-results/*
-!results/.gitkeep
-tests/fixtures/
+stores/
+data/
+*.tar.gz
 .Rhistory

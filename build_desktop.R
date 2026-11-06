@@ -1,36 +1,35 @@
 #!/usr/bin/env Rscript
-# Construit l'app desktop (Electron) à partir de app/ avec shinyelectron.
-# Stratégie "shinylive" : R tourne en WebAssembly dans l'app, l'utilisateur
-# n'a rien à installer (ni R, ni Node). Les tables de app/data/ sont incluses.
+# Builds the desktop app (Electron + webR) and the static web site from app/
+# and the atlas stores.
 #
-# Usage : Rscript build_desktop.R            # plateforme courante
-#         Rscript build_desktop.R win|mac|linux
+# Usage: Rscript build_desktop.R <stores_dir> [win|mac|linux]
+#        Rscript build_desktop.R <stores_dir> site     # static site only, in build/site
 #
-# Prérequis machine de build : R >= 4.5, Node >= 22, npm >= 11.5
-#   shinyelectron::sitrep_shinyelectron()  pour vérifier
-#   shinyelectron::install_nodejs()        pour installer Node sans droits admin
-#
-# Notes :
-# - Un mac ne se construit que sur macOS, Windows plus fiablement sur Windows :
-#   le workflow .github/workflows/desktop.yml fait les trois en CI.
-# - shinyelectron est un prototype (« pas recommandé en production ») : tester
-#   l'exécutable avant de l'envoyer.
-# - Les builds ne sont pas signés : avertissement SmartScreen sous Windows,
-#   clic droit > Ouvrir la première fois sous macOS.
+# The app runs R compiled to WebAssembly (shinylive), so the user installs
+# nothing. The stores are served next to the app under data/ and read gene by
+# gene with HTTP range requests.
 
 args <- commandArgs(trailingOnly = TRUE)
-platform <- if (length(args)) args[1] else NULL
+stores <- normalizePath(args[1], mustWork = TRUE)
+target <- if (length(args) > 1) args[2] else NULL
+atlases <- c("lamanno2021", "zeisel2018", "braun2023", "velmeshev2023")
 
-if (!file.exists("app/data/expression_summary.csv.gz"))
-  message("!! app/data/ vide : l'app desktop affichera les données de DÉMONSTRATION. ",
-          "Lancez run_pipeline.R d'abord.")
+site <- file.path("build", "site")
+unlink(site, recursive = TRUE)
+shinylive::export("app", site, quiet = TRUE)
+for (a in atlases) {
+  dir.create(file.path(site, "data", a), recursive = TRUE)
+  stopifnot(file.copy(list.files(file.path(stores, a), full.names = TRUE), file.path(site, "data", a)))
+}
+message("Site: ", site)
+if (identical(target, "site")) quit(save = "no")
 
-shinyelectron::export(
-  appdir = "app",
-  destdir = "build",
+shinyelectron::build_electron_app(
+  app_dir = site,
+  output_dir = file.path("build", "electron-app"),
   app_name = "Brain Gene Expression",
   runtime_strategy = "shinylive",
-  platform = platform,
+  platform = target,
   overwrite = TRUE
 )
-message("Exécutables : build/electron-app/dist/")
+message("Executables: build/electron-app/dist/")

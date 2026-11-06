@@ -1,0 +1,131 @@
+# Tests the app on the real atlas stores, publishes the web version on GitHub
+# Pages at every push to main, and attaches the desktop apps (Windows, macOS,
+# Linux) to a GitHub Release for every v* tag.
+#
+# The stores come from the data-v1 release, built by extract/extract.R.
+name: publish
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATA_TAG: data-v1
+  DATA_FILE: brain-expr-data.tar.gz
+  DATA_SHA256: ccd277416008f74e6a0c5c26f283fe094d6758ca302c31940e6b244846933008
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::shiny
+            any::bslib
+            any::ggplot2
+            any::DT
+            any::shinylive
+      - name: Fetch atlas stores
+        shell: bash
+        run: |
+          gh release download "$DATA_TAG" -p "$DATA_FILE" -R "$GITHUB_REPOSITORY"
+          echo "$DATA_SHA256  $DATA_FILE" | sha256sum -c -
+          mkdir stores && tar -xzf "$DATA_FILE" -C stores
+      - name: Test the server logic on every atlas
+        run: Rscript tests/test_app.R app
+        env:
+          BRAIN_EXPR_DATA: stores
+      - name: Build the web version
+        run: Rscript build_desktop.R stores site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/site
+
+  pages:
+    needs: site
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  desktop:
+    needs: site
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+          - os: macos-latest
+            platform: mac
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: npm >= 11.5
+        run: npm install -g npm@11
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::shiny
+            any::bslib
+            any::ggplot2
+            any::DT
+            any::shinylive
+            any::shinyelectron
+      - name: Fetch atlas stores
+        shell: bash
+        run: |
+          gh release download "$DATA_TAG" -p "$DATA_FILE" -R "$GITHUB_REPOSITORY"
+          if command -v sha256sum >/dev/null; then sum=sha256sum; else sum="shasum -a 256"; fi
+          echo "$DATA_SHA256  $DATA_FILE" | $sum -c -
+          mkdir stores && tar -xzf "$DATA_FILE" -C stores
+      - name: Build
+        run: Rscript build_desktop.R stores ${{ matrix.platform }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brain-gene-expression-${{ matrix.platform }}
+          path: |
+            build/electron-app/dist/*.exe
+            build/electron-app/dist/*.dmg
+            build/electron-app/dist/*.AppImage
+          if-no-files-found: error
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/electron-app/dist/*.exe
+            build/electron-app/dist/*.dmg
+            build/electron-app/dist/*.AppImage
