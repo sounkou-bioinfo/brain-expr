@@ -1,0 +1,6 @@
+build/
+data/raw/*.loom
+results/*
+!results/.gitkeep
+tests/fixtures/
+.Rhistory

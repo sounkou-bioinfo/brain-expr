@@ -1,0 +1,75 @@
+# Construit l'app desktop pour Windows, macOS et Linux à chaque tag v*
+# (ou à la main via "Run workflow"). Les exécutables sont attachés à l'exécution
+# (onglet Actions > Artifacts) et, pour un tag, à une Release GitHub.
+# app/data/ doit contenir les tables du pipeline (commitées dans le dépôt).
+name: desktop
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+          - os: macos-latest
+            platform: mac
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: npm >= 11.5
+        run: npm install -g npm@11
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::shinyelectron
+            any::shinylive
+            any::shiny
+            any::bslib
+            any::DT
+            any::data.table
+            any::ggplot2
+
+      - name: Build
+        run: Rscript build_desktop.R ${{ matrix.platform }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brain-gene-expression-${{ matrix.platform }}
+          path: |
+            build/electron-app/dist/*.exe
+            build/electron-app/dist/*.dmg
+            build/electron-app/dist/*.zip
+            build/electron-app/dist/*.AppImage
+          if-no-files-found: error
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/electron-app/dist/*.exe
+            build/electron-app/dist/*.dmg
+            build/electron-app/dist/*.zip
+            build/electron-app/dist/*.AppImage
