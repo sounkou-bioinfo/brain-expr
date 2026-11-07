@@ -77,8 +77,10 @@ match_genes <- function(store, symbols) {
   list(found = store$genes$gene[hit[!is.na(hit)]], missing = symbols[is.na(hit)])
 }
 
+# Reads the blocks of the genes present in the store; absent symbols are skipped.
 read_genes <- function(store, genes) {
   rows <- store$key[toupper(genes)]
+  rows <- rows[!is.na(rows)]
   blocks <- lapply(rows, function(r)
     decode_gene(store_range(store$src, store$genes$offset[r], store$genes$nbytes[r])))
   setNames(blocks, store$genes$gene[rows])

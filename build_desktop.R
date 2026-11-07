@@ -21,6 +21,7 @@ for (a in atlases) {
   dir.create(file.path(site, "data", a), recursive = TRUE)
   stopifnot(file.copy(list.files(file.path(stores, a), full.names = TRUE), file.path(site, "data", a)))
 }
+if (file.exists("docs/walkthrough.mp4")) file.copy("docs/walkthrough.mp4", site)
 message("Site: ", site)
 if (identical(target, "site")) quit(save = "no")
 

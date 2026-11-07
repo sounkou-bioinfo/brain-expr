@@ -14,9 +14,13 @@ deux chez la souris et deux chez l'humain :
 
 Tous les gènes de chaque atlas sont disponibles.
 
-![Dotplot de dix marqueurs dans La Manno 2021, E12.5 et E13.5](docs/dotplot-lamanno.png)
+**Vidéo de démonstration (2 min) :** <https://sounkou-bioinfo.github.io/brain-expr/walkthrough.mp4>
 
-![Coexpression des mêmes marqueurs, astrocytes humains de 0 à 1 an](docs/coexpression.png)
+![Vue d'ensemble : dix gènes d'épilepsie dans le cerveau de souris E12.5 et E13.5](docs/vue-ensemble.png)
+
+![Au fil du développement : STXBP1 dans le cerveau humain, 5 à 14 semaines](docs/evolution.png)
+
+![Coexpression des mêmes gènes, neurones humains à 11,5 semaines](docs/coexpression.png)
 
 ## Utiliser l'app
 
@@ -33,10 +37,18 @@ Dans l'app :
 
 1. Choisissez l'atlas.
 2. Collez vos gènes, séparés par des espaces, des virgules ou des retours à la
-   ligne. La casse ne compte pas : `Pax6` trouve `PAX6` chez l'humain. Les gènes
-   absents de l'atlas sont signalés en rouge sous le bouton.
-3. Cliquez sur **Afficher**. Les onglets donnent le dotplot, l'évolution par
-   stade, la coexpression et une table à télécharger en CSV.
+   ligne, ou cliquez sur un exemple. La casse ne compte pas : `Pax6` trouve
+   `PAX6` chez l'humain. Les gènes absents de l'atlas sont signalés en rouge.
+3. Cliquez sur **Afficher**. Chaque onglet commence par un encadré « Comment
+   lire ce graphique » :
+   - **Vue d'ensemble** : un point par gène et par groupe de cellules ;
+   - **Au fil du développement** : un gène, stade par stade ;
+   - **Coexpression** : deux gènes sont-ils dans les mêmes cellules ?
+   - **Tableau** : les chiffres, à télécharger en CSV ;
+   - **Guide** : les atlas, les mesures, les précautions et un petit lexique.
+
+Les groupes de moins de 20 cellules à un stade sont cachés : sur si peu de
+cellules, un pourcentage ne veut rien dire.
 
 ## Ce que calcule l'app
 
@@ -99,6 +111,7 @@ Pour l'humain, l'échantillonnage (`CELLS_PER_GROUP`, `SEED`) se règle en tête
 ```bash
 BRAIN_EXPR_DATA=stores Rscript -e 'shiny::runApp("app")'   # R natif
 BRAIN_EXPR_DATA=stores Rscript tests/test_app.R app        # logique serveur, 4 atlas
+python tests/walkthrough.py <url_du_site> out/              # parcours navigateur + vidéo
 Rscript build_desktop.R stores site                         # site statique : build/site
 Rscript build_desktop.R stores linux                        # app de bureau : build/electron-app/dist
 ```
