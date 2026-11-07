@@ -120,8 +120,13 @@ jobs:
         shell: bash
         run: |
           pip install playwright
-          dir=$(ls -d build/electron-app/dist/*-unpacked build/electron-app/dist/mac* 2>/dev/null | head -1)
+          dir=
+          for d in build/electron-app/dist/*-unpacked build/electron-app/dist/mac*; do
+            if [ -d "$d" ]; then dir=$d; break; fi
+          done
           echo "unpacked: $dir"
+          ls build/electron-app/dist
+          test -n "$dir"
           if [ "$RUNNER_OS" = "Linux" ]; then
             xvfb-run -a python tests/test_electron.py "$dir" shots
           else
