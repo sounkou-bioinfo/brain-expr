@@ -113,6 +113,26 @@ jobs:
           mkdir stores && tar -xzf "$DATA_FILE" -C stores
       - name: Build
         run: Rscript build_desktop.R stores ${{ matrix.platform }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Launch the built app and open every tab
+        shell: bash
+        run: |
+          pip install playwright
+          dir=$(ls -d build/electron-app/dist/*-unpacked build/electron-app/dist/mac* 2>/dev/null | head -1)
+          echo "unpacked: $dir"
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a python tests/test_electron.py "$dir" shots
+          else
+            python tests/test_electron.py "$dir" shots
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-${{ matrix.platform }}
+          path: shots
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: brain-gene-expression-${{ matrix.platform }}

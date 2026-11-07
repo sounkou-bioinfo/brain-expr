@@ -141,3 +141,8 @@ et vérifie leur somme SHA-256. Il teste ensuite l'app sur les quatre atlas.
   utilisez l'ISH (Allen Developing Mouse Brain Atlas) ou des données spatiales.
 - shinyelectron se décrit comme un prototype. Testez l'installeur avant de
   l'envoyer.
+
+## Licence
+
+Le code de ce dépôt est sous licence GPL-2.0-or-later (voir `LICENSE`). Les
+données restent sous la licence de chaque atlas d'origine.
