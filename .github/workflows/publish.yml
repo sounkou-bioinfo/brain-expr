@@ -2,7 +2,7 @@
 # Pages at every push to main, and attaches the desktop apps (Windows, macOS,
 # Linux) to a GitHub Release for every v* tag.
 #
-# The stores come from the data-v1 release, built by extract/extract.R.
+# The stores come from the data-v2 release, built by extract/extract.R and extract/mouse_dev.R.
 name: publish
 
 on:
@@ -21,9 +21,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DATA_TAG: data-v1
-  DATA_FILE: brain-expr-data.tar.gz
-  DATA_SHA256: ccd277416008f74e6a0c5c26f283fe094d6758ca302c31940e6b244846933008
+  DATA_TAG: data-v2
+  DATA_FILE: brain-expr-data-v2.tar.gz
+  DATA_SHA256: a4bdd2f5574c81c233feda947fa88310db7d7fc7835c30c21822d4c5312d434f
   GH_TOKEN: ${{ github.token }}
 
 jobs:

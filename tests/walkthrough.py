@@ -47,14 +47,26 @@ def choose(f, input_id, value):
     f.evaluate("([id, v]) => document.getElementById(id).selectize.setValue(v)", [input_id, value])
 
 
+def busy(f, oid):
+    """True while Shiny recomputes output `oid` or shows a progress bar."""
+    try:
+        return f.evaluate(
+            "(id) => { const e = document.getElementById(id);"
+            " return !!(e && e.classList.contains('recalculating')) ||"
+            " document.querySelectorAll('.shiny-notification').length > 0; }", oid)
+    except Exception:
+        return True
+
+
 def wait_plot(f, oid, old="", timeout=90):
-    """Waits until output `oid` shows an image different from `old`, then lets it settle."""
+    """Waits until output `oid` shows a new image and Shiny has finished computing."""
     t0 = time.time()
     while time.time() - t0 < timeout:
         s = plot_src(f, oid)
-        if s and s != old:
+        if s and s != old and not busy(f, oid):
             time.sleep(1.5)
-            return time.time() - t0
+            if not busy(f, oid):
+                return time.time() - t0
         time.sleep(0.3)
     raise RuntimeError(f"plot #{oid} did not render within {timeout}s")
 
@@ -67,7 +79,14 @@ with sync_playwright() as p:
     step = [0]
 
     def say(text, hold):
-        pg.evaluate(CAPTION_JS, text)
+        # On a first visit shinylive reloads the page once its service worker is
+        # installed; a caption drawn during that reload is retried on the new page.
+        for _ in range(20):
+            try:
+                pg.evaluate(CAPTION_JS, text)
+                break
+            except Exception:
+                time.sleep(0.5)
         time.sleep(hold)
 
     def shot(name):
@@ -86,82 +105,98 @@ with sync_playwright() as p:
     wait_plot(f, "dot", timeout=240)
     print(f"app ready after {time.time() - t0:.0f}s", flush=True)
 
-    say("Cette app montre <b>dans quelles cellules du cerveau</b>, et <b>à quel stade</b>, vos gènes sont exprimés.", 5)
+    say("Cette app montre <b>dans quelles cellules du cerveau</b>, <b>dans quelle région</b> et <b>à quel stade</b> vos gènes sont exprimés.", 5)
     shot("accueil")
-    say("<b>Étape 1</b> : choisir un atlas. Ici, le cerveau de souris embryonnaire, E12.5 et E13.5.", 5)
-    f.locator("#atlas_card").scroll_into_view_if_needed()
-    say("<b>Étape 2</b> : entrer ses gènes. Un exemple : une liste de gènes associés à l'épilepsie.", 3)
-    old = plot_src(f, "dot")
-    f.get_by_role("button", name="Gènes d'épilepsie").click()
-    time.sleep(1.5)
-    say("Puis cliquer sur <b>Afficher</b>.", 1.5)
-    f.get_by_role("button", name="Afficher").click()
-    wait_plot(f, "dot", old)
-    shot("epilepsie_souris")
-    say("Une ligne par type de cellules, une colonne par gène. <b>Gros point</b> = beaucoup de cellules expriment le gène.", 6)
-    say("<b>Point clair (jaune)</b> = le gène y est exprimé fort. Ex. <i>Stxbp1</i> et <i>Kcnq2</i> : surtout dans les neurones, moins dans les neuroblastes.", 7)
-
-    say("Changeons d'atlas : le cerveau <b>humain</b> du premier trimestre (5 à 14 semaines).", 3)
-    old = plot_src(f, "dot")
-    choose(f, "atlas", "braun2023")
-    wait_plot(f, "dot", old)
-    shot("epilepsie_humain")
-    say("Les mêmes gènes, un panneau par stade. Faites défiler pour voir tous les stades.", 4)
+    say("<b>Étape 1</b> : l'atlas. Celui-ci réunit 8 études : le prosencéphale de souris de E10.5 à l'adulte, région par région.", 6)
+    say("Les âges sont regroupés autour de E10.5, E12.5, E13.5, E15.5, P0, P10, P21, P40 et P100. Le signe ≈ indique l'âge réel le plus proche.", 6)
+    say("<b>Étape 2</b> : les gènes. Ici <i>Myo9b, Trio, Rhoa, Rac1, Cdc42</i>, déjà affichés : on clique sur <b>Afficher</b> après chaque changement.", 4)
+    shot("vue_ensemble")
+    say("Une ligne par type cellulaire, une colonne par gène, un panneau par âge. <b>Gros point</b> = beaucoup de cellules expriment le gène ; <b>jaune</b> = exprimé fort.", 7)
+    say("Les types cellulaires sont les mêmes pour toutes les études : progéniteurs Nkx2-1+, interneurones Lhx6+, PV+, SST+, pyramidaux, glie…", 6)
     pg.mouse.move(900, 500)
-    for _ in range(6):
-        pg.mouse.wheel(0, 350)
+    for _ in range(5):
+        pg.mouse.wheel(0, 400)
         time.sleep(0.6)
-    time.sleep(1.5)
-    for _ in range(6):
-        pg.mouse.wheel(0, -350)
+    time.sleep(1)
+    for _ in range(5):
+        pg.mouse.wheel(0, -400)
         time.sleep(0.3)
 
-    say("Onglet <b>Au fil du développement</b> : un gène à la fois, son évolution stade par stade.", 2)
+    say("<b>Étape 3</b> : affiner. Choisir des <b>régions</b> : par exemple la MGE et le cortex somatosensoriel.", 3)
+    old = plot_src(f, "dot")
+    choose(f, "regions", ["MGE", "Cortex somatosensoriel"])
+    wait_plot(f, "dot", old)
+    shot("regions")
+    say("Seules les cellules de ces régions restent. La MGE n'existe qu'à l'embryon : les panneaux postnataux montrent le cortex.", 6)
+
+    say("Et ne garder que les cellules qui expriment un gène, ici <i>Lhx6</i> : la lignée des interneurones issus de la MGE.", 3)
+    f.locator("#pos_gene").fill("Lhx6")
+    old = plot_src(f, "dot")
+    f.get_by_role("button", name="Afficher").click()
+    wait_plot(f, "dot", old)
+    shot("lhx6")
+    say("Vos gènes, uniquement dans les cellules <i>Lhx6</i>+, de la MGE embryonnaire jusqu'au cortex.", 6)
+
+    say("Onglet <b>Au fil du développement</b> : un gène à la fois, âge par âge.", 2)
     old = plot_src(f, "time")
     f.get_by_role("tab", name="Au fil du développement").click()
     wait_plot(f, "time", old)
-    shot("evolution")
-    say("Les 6 types de cellules où le gène est le plus présent sont en couleur, les autres en gris.", 6)
     old = plot_src(f, "time")
-    choose(f, "time_gene", "STXBP1")
+    choose(f, "time_gene", "Trio")
     wait_plot(f, "time", old)
-    say("<i>STXBP1</i> dans les neurones : la valeur varie beaucoup d'un stade à l'autre.", 4)
-    say("Chaque stade vient de peu d'embryons et de régions différentes : lisez la tendance générale, pas un point isolé.", 6)
-    shot("evolution_stxbp1")
+    shot("evolution_trio")
+    say("<i>Trio</i> dans les cellules <i>Lhx6</i>+ : chaque ligne est un type cellulaire. Un point manque quand le groupe a moins de 20 cellules.", 7)
+    say("Les âges viennent d'études différentes : lisez la tendance générale, pas un point isolé.", 5)
 
-    say("Onglet <b>Coexpression</b> : deux gènes sont-ils exprimés <b>dans les mêmes cellules</b> ?", 2)
+    f.locator("#pos_gene").fill("")
+    choose(f, "regions", [])
     old = plot_src(f, "coex")
+    f.get_by_role("button", name="Afficher").click()
+    say("Onglet <b>Coexpression</b> : deux gènes sont-ils exprimés <b>dans les mêmes cellules</b> ?", 2)
     f.get_by_role("tab", name="Coexpression").click()
     wait_plot(f, "coex", old)
     old = plot_src(f, "coex")
-    choose(f, "cx_stage", "11,5 sem.")
+    choose(f, "cx_stage", "≈ E13.5")
     wait_plot(f, "coex", old)
     old = plot_src(f, "coex")
-    choose(f, "cx_ct", "Neuron")
+    choose(f, "cx_ct", "Interneurones Lhx6+ immatures (issus de la MGE)")
     wait_plot(f, "coex", old)
-    say("Ici : les neurones humains à 11,5 semaines.", 3)
     f.locator("#coex").scroll_into_view_if_needed()
     pg.mouse.move(900, 500)
     pg.mouse.wheel(0, 250)
     time.sleep(1.5)
     shot("coexpression")
-    say("<b>Rouge</b> = ensemble plus souvent que le hasard (×2 = deux fois plus). <b>Bleu</b> = moins souvent. Étoiles = écart solide.", 8)
-    say("Choisissez le stade et le type de cellules en haut. Le détail des paires est dans le tableau en dessous.", 5)
-
+    say("Ici : les interneurones Lhx6+ vers E13.5. <b>Rouge</b> = ensemble plus souvent que le hasard, <b>bleu</b> = moins souvent, étoiles = écart solide.", 8)
     pg.mouse.wheel(0, -2000)
     time.sleep(1)
-    say("Onglet <b>Tableau</b> : tous les chiffres, téléchargeables pour Excel.", 2)
+
+    say("Toute une famille de gènes : <b>Ou charger une liste prête</b> → les 159 régulateurs des Rho GTPases.", 3)
+    choose(f, "preset", "rho:all")
+    time.sleep(1.5)
+    f.get_by_role("tab", name="Carte de chaleur").click()
+    old = plot_src(f, "heat")
+    f.get_by_role("button", name="Afficher").click()
+    wait_plot(f, "heat", old, timeout=180)
+    shot("carte_rho")
+    say("Onglet <b>Carte de chaleur</b> : une ligne par gène, rangés par famille (Rho GTPases, GEF, GAP, GDI, myosines IX). <b>Foncé</b> = beaucoup de cellules.", 7)
+    pg.mouse.move(900, 500)
+    for _ in range(6):
+        pg.mouse.wheel(0, 450)
+        time.sleep(0.6)
+    time.sleep(1)
+    pg.mouse.wheel(0, -4000)
+    time.sleep(1)
+
+    say("Onglet <b>Tableau</b> : tous les chiffres, à télécharger pour Excel.", 2)
     f.get_by_role("tab", name="Tableau").click()
     time.sleep(3)
     shot("tableau")
-    time.sleep(3)
-
-    say("Onglet <b>Guide</b> : les quatre atlas, ce que veulent dire les chiffres, et les précautions.", 2)
+    say("Onglet <b>Guide</b> : les études, les âges réels, ce que veulent dire les chiffres et les précautions.", 2)
     f.get_by_role("tab", name="Guide").click()
     time.sleep(2)
     shot("guide")
     time.sleep(4)
-    say("À vous : collez votre liste de gènes et cliquez sur <b>Afficher</b>.", 4)
+    say("À vous : choisissez un atlas, collez vos gènes et cliquez sur <b>Afficher</b>.", 4)
     say("", 0.5)
 
     errors = []

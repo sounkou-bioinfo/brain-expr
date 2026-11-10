@@ -11,12 +11,35 @@ suppressPackageStartupMessages({
 source("store.R", local = TRUE)
 source("labels.R", local = TRUE)
 
-ATLASES <- c("lamanno2021", "zeisel2018", "braun2023", "velmeshev2023")
+ATLASES <- c("souris_dev", "lamanno2021", "zeisel2018", "braun2023", "velmeshev2023")
 EXAMPLES <- list(
+  rho_core = "Myo9b Trio Rhoa Rac1 Cdc42",
   markers = "Pax6 Sox2 Hes5 Mki67 Eomes Neurod2 Tbr1 Gad2 Olig2 Aqp4",
-  epilepsy = "Scn1a Scn8a Kcnq2 Stxbp1 Cdkl5 Gabra1 Depdc5 Tsc2 Arx Foxg1"
+  epilepsy = "Scn1a Scn8a Kcnq2 Stxbp1 Cdkl5 Gabra1 Depdc5 Tsc2 Arx Foxg1",
+  lineage = "Nkx2-1 Lhx6 Dlx1 Dlx2 Dlx5 Cxcr4 Cxcr7 Erbb4 Sst Pvalb Gad1 Mki67"
 )
-MAX_GENES <- 30L
+# Rho GTPase regulators from the HGNC gene groups, with MGI mouse orthologues.
+RHO <- utils::read.delim("rho_regulators.tsv", stringsAsFactors = FALSE)
+PRESETS <- c("Choisir une liste…" = "",
+             "Myo9b, Trio, Rhoa, Rac1, Cdc42" = "rho_core",
+             "Régulateurs des Rho GTPases : tous" = "rho:all",
+             setNames(paste0("rho:", unique(RHO$family)),
+                      paste("Régulateurs Rho :", unique(RHO$family))),
+             "Lignée des interneurones (MGE → cortex)" = "lineage",
+             "Marqueurs classiques" = "markers",
+             "Gènes d'épilepsie" = "epilepsy")
+MAX_GENES <- 200L
+
+# Gene symbols of a preset list, in the species' nomenclature.
+preset_genes <- function(p, species) {
+  if (!startsWith(p, "rho:")) return(strsplit(EXAMPLES[[p]], " ")[[1]])
+  fam <- sub("^rho:", "", p)
+  r <- if (fam == "all") RHO else RHO[RHO$family == fam, ]
+  if (identical(species, "human")) r$human else ifelse(nzchar(r$mouse), r$mouse, r$human)
+}
+# The dotplot and the coexpression stay readable up to this many genes; the
+# heatmap shows them all.
+MAX_DOT <- 30L
 # Groups smaller than this are hidden: with 2 or 3 cells, one detection is 33-50 %.
 MIN_CELLS <- 20L
 POOLED <- "Stades sélectionnés, regroupés"
@@ -77,16 +100,20 @@ ui <- page_sidebar(
     selectInput("atlas", NULL, NULL),
     uiOutput("atlas_card"),
     div(class = "step mt-3", "2. Entrer vos gènes"),
-    textAreaInput("genes_txt", NULL, EXAMPLES$markers, rows = 4,
-                  placeholder = "ex. Scn1a Kcnq2 Gabra1"),
+    textAreaInput("genes_txt", NULL, EXAMPLES$rho_core, rows = 4,
+                  placeholder = "ex. Trio Rac1 Cdc42"),
     div(class = "small text-muted mb-1",
-        "Séparés par des espaces ou des virgules. Majuscules ou minuscules : peu importe."),
-    div("Exemples : ",
-        actionButton("ex_markers", "Marqueurs classiques", class = "btn-outline-secondary btn-example"),
-        actionButton("ex_epilepsy", "Gènes d'épilepsie", class = "btn-outline-secondary btn-example")),
+        "Séparés par des espaces ou des virgules. Majuscules ou minuscules : peu importe. ",
+        sprintf("Jusqu'à %d gènes.", MAX_GENES)),
+    selectInput("preset", "Ou charger une liste prête", PRESETS),
     actionButton("go", "Afficher", class = "btn-primary w-100 mt-2"),
     uiOutput("gene_msg"),
     div(class = "step mt-3", "3. Affiner (facultatif)"),
+    uiOutput("region_ui"),
+    textInput("pos_gene", "Seulement les cellules qui expriment…", "",
+              placeholder = "ex. Pvalb, Sst, Nkx2-1, Lhx6"),
+    div(class = "small text-muted mb-2",
+        "Un gène : l'app ne garde que les cellules où il est détecté. Appliqué avec « Afficher »."),
     selectInput("level", "Grouper les cellules par", NULL),
     checkboxGroupInput("stages", "Stades à afficher", NULL),
     checkboxInput("pool", "Regrouper les stades cochés en un seul", FALSE),
@@ -109,6 +136,12 @@ ui <- page_sidebar(
                   "Les groupes qui se ressemblent sont placés côte à côte. ",
                   sprintf("Les groupes de moins de %d cellules sont cachés.", MIN_CELLS)),
       uiOutput("dot_ui")),
+    nav_panel("Carte de chaleur",
+      how_to_read("Une ligne par gène, une colonne par groupe de cellules, un panneau par stade. ",
+                  tags$b("Plus la case est foncée"), ", plus la part des cellules du groupe qui expriment le gène est grande. ",
+                  "Cette vue montre toute la liste (jusqu'à ", MAX_GENES, " gènes) ; ",
+                  "pour les régulateurs des Rho GTPases, les gènes sont regroupés par famille."),
+      uiOutput("heat_ui")),
     nav_panel("Au fil du développement",
       layout_columns(col_widths = c(4, 8),
         selectInput("time_gene", "Gène", NULL),
@@ -165,8 +198,11 @@ server <- function(input, output, session) {
                       choices = setNames(names(s), vapply(s, function(x) x$text$short, "")))
   }) |> bindEvent(session$clientData$url_hostname, once = TRUE)
 
-  observeEvent(input$ex_markers, updateTextAreaInput(session, "genes_txt", value = EXAMPLES$markers))
-  observeEvent(input$ex_epilepsy, updateTextAreaInput(session, "genes_txt", value = EXAMPLES$epilepsy))
+  observeEvent(input$preset, {
+    req(nzchar(input$preset))
+    g <- preset_genes(input$preset, st()$meta$species)
+    updateTextAreaInput(session, "genes_txt", value = paste(g, collapse = " "))
+  })
 
   st <- reactive({ req(stores(), input$atlas); stores()[[input$atlas]] })
 
@@ -187,11 +223,37 @@ server <- function(input, output, session) {
   # Store, grouping level and stages valid for the current atlas. After an atlas
   # switch the inputs still hold the previous atlas's values until the update
   # round-trips. With pooling, the checked stages become one stage.
+  # Region choices for atlases that declare a region column.
+  output$region_ui <- renderUI({
+    s <- st()
+    lv <- s$meta$filter_level
+    if (is.null(lv) || is.na(lv)) return(NULL)
+    r <- sort(unique(s$cells[[lv]]))
+    selectizeInput("regions", "Régions", r, selected = NULL, multiple = TRUE,
+                   options = list(placeholder = "Toutes les régions"))
+  })
+
+  # Cells expressing the "positive" gene, read once per click on Afficher.
+  pos <- reactive({
+    g <- trimws(input$pos_gene)
+    if (!nzchar(g)) return(NULL)
+    b <- read_genes(st(), g)
+    validate(need(length(b) == 1, sprintf("« %s » est introuvable dans cet atlas.", g)))
+    list(gene = names(b), cells = b[[1]]$cell)
+  }) |> bindEvent(input$go, st(), ignoreNULL = FALSE)
+
   view <- reactive({
     s <- st()
     req(input$level %in% s$meta$levels)
     stg <- intersect(input$stages, s$cells$stage)
     req(length(stg) > 0)
+    # Region and positive-gene filters drop cells by moving them out of every stage.
+    drop <- rep(FALSE, nrow(s$cells))
+    lv <- s$meta$filter_level
+    if (!is.null(lv) && !is.na(lv) && length(input$regions)) drop <- drop | !s$cells[[lv]] %in% input$regions
+    p <- pos()
+    if (!is.null(p)) drop <- drop | !seq_len(nrow(s$cells)) %in% p$cells
+    s$cells$stage[drop] <- NA
     if (isTRUE(input$pool) && length(stg) > 1) {
       hit <- s$cells$stage %in% stg
       s$cells$stage[hit] <- POOLED
@@ -206,17 +268,23 @@ server <- function(input, output, session) {
 
   hits <- reactive(match_genes(st(), genes_req()))
 
-  blocks <- reactive({
+  blocks_all <- reactive({
     g <- hits()$found
     validate(need(length(g) > 0, "Aucun des gènes demandés n'est dans cet atlas."))
-    withProgress(message = "Lecture des gènes…", value = 0.5, read_genes(st(), g))
+    withProgress(message = sprintf("Lecture de %d gènes…", length(g)), value = 0.5, read_genes(st(), g))
   })
+  # The dotplot, time course and coexpression show the first MAX_DOT genes.
+  blocks <- reactive(head(blocks_all(), MAX_DOT))
 
   output$gene_msg <- renderUI({
     h <- hits()
     msg <- character()
-    if (length(parse_genes(input$genes_txt)) > MAX_GENES)
-      msg <- c(msg, sprintf("Seuls les %d premiers gènes sont affichés.", MAX_GENES))
+    n <- length(parse_genes(input$genes_txt))
+    if (n > MAX_GENES)
+      msg <- c(msg, sprintf("Seuls les %d premiers gènes sont lus.", MAX_GENES))
+    if (length(h$found) > MAX_DOT)
+      msg <- c(msg, sprintf("Carte de chaleur : %d gènes. Vue d'ensemble, évolution et coexpression : les %d premiers.",
+                            length(h$found), MAX_DOT))
     if (length(h$missing))
       msg <- c(msg, paste("Introuvable(s) dans cet atlas :", paste(h$missing, collapse = ", ")))
     if (length(msg)) div(class = "missing mt-2", HTML(paste(msg, collapse = "<br>")))
@@ -267,6 +335,47 @@ server <- function(input, output, session) {
     rows <- ceiling(n_facets() / ncol_facets())
     plotOutput("dot", height = paste0(max(380, 110 + rows * (70 + 18 * nlevels(summ()$celltype))), "px"),
                fill = FALSE)
+  })
+
+  # --- carte de chaleur : toute la liste, groupée par famille Rho quand elle s'applique ---
+  heat <- reactive({
+    v <- view()
+    d <- summarise_genes(v$store, blocks_all(), v$level, v$stages)
+    d <- d[d$n_cells >= MIN_CELLS, ]
+    if (nzchar(input$ctfilter))
+      d <- d[grepl(input$ctfilter, d$celltype, ignore.case = TRUE), ]
+    validate(need(nrow(d) > 0, "Aucun groupe d'au moins 20 cellules avec ces filtres."))
+    fam <- RHO$family[match(toupper(d$gene), toupper(ifelse(nzchar(RHO$mouse), RHO$mouse, RHO$human)))]
+    fam2 <- RHO$family[match(toupper(d$gene), toupper(RHO$human))]
+    fam[is.na(fam)] <- fam2[is.na(fam)]
+    d$family <- factor(ifelse(is.na(fam), "Votre liste", fam), c(unique(RHO$family), "Votre liste"))
+    d$gene <- factor(d$gene, rev(names(blocks_all())))
+    d$stage <- factor(d$stage, unique(d$stage[order(d$stage_rank)]))
+    d$celltype <- factor(d$celltype)
+    droplevels(d)
+  })
+
+  output$heat <- renderPlot({
+    d <- heat()
+    ggplot(d, aes(celltype, gene, fill = pct_expressing)) +
+      geom_tile(colour = "white", linewidth = 0.2) +
+      facet_grid(family ~ stage, scales = "free", space = "free") +
+      scale_fill_gradientn(colours = c("#f7fbff", "#9ecae1", "#3182bd", "#08306b"), limits = c(0, 100),
+                           labels = function(x) paste0(x, " %"),
+                           name = "Cellules du groupe\nqui expriment le gène") +
+      labs(x = NULL, y = NULL) + theme_app() +
+      theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 10),
+            axis.text.y = element_text(face = "italic", size = 9),
+            strip.text.y = element_text(angle = 0, hjust = 0, size = 10),
+            panel.grid = element_blank(), panel.spacing = unit(4, "pt"),
+            legend.position = "top", legend.justification = "left")
+  })
+  output$heat_ui <- renderUI({
+    d <- heat()
+    h <- max(420, 220 + 13 * nlevels(d$gene) + 14 * nlevels(d$family))
+    w <- max(900, 260 + 16 * nlevels(d$celltype) * nlevels(d$stage))
+    div(style = "overflow-x: auto;",
+        plotOutput("heat", height = paste0(h, "px"), width = paste0(w, "px"), fill = FALSE))
   })
 
   # --- au fil du développement ---
@@ -387,8 +496,31 @@ server <- function(input, output, session) {
     s <- stores()
     tagList(
       h5("À quoi sert cette app"),
-      p("Elle répond à la question : ", tags$em("dans quelles cellules du cerveau, et à quel stade, mes gènes sont-ils exprimés ?"),
-        " Elle s'appuie sur quatre grands atlas publiés, où l'ARN de chaque cellule a été séquencé une à une (scRNA-seq)."),
+      p("Elle répond à la question : ", tags$em("dans quelles cellules du cerveau, dans quelle région et à quel stade, mes gènes sont-ils exprimés ?"),
+        " Elle s'appuie sur des atlas publiés où l'ARN de chaque cellule a été séquencé une à une (scRNA-seq)."),
+      h5("L'atlas « Souris · E10.5 → adulte, par région »"),
+      p("Il réunit 8 études pour suivre le prosencéphale de E9 à l'adulte, région par région : ",
+        "MGE, LGE, CGE, pallium, cortex somatosensoriel, hippocampe, striatum, amygdale."),
+      tags$ul(
+        tags$li(tags$b("Âges"), " : les cellules sont regroupées autour de E10.5, E12.5, E13.5, E15.5, P0, P10, P21, P40 et P100. ",
+                "Le signe ≈ rappelle que les âges réels sont les plus proches disponibles. Pour les voir, groupez par « Âge exact »."),
+        tags$li(tags$b("Types cellulaires harmonisés"), " : un même classement pour toutes les études, à partir de gènes marqueurs ",
+                "(ex. Nkx2-1 pour les progeniteurs de la MGE, Lhx6 pour les interneurones issus de la MGE, Pvalb, Sst, Aqp4, Olig1, C1qa). ",
+                "C'est une classification automatique, pas une annotation publiée : « Grouper par : Annotation publiée » montre celle des auteurs."),
+        tags$li(tags$b("Cellules triées"), " : Allaway 2021 et Mayer 2018 ont trié leurs cellules sur un gène rapporteur (Dlx6, Lhx6). ",
+                "Dans ces échantillons, les pourcentages décrivent la lignée triée, pas tout le tissu. « Grouper par : Tri des cellules » les isole."),
+        tags$li(tags$b("Ce qui manque"), " : l'amygdale avant P21, le cortex somatosensoriel après P30, l'hippocampe avant E15.5, le striatum embryonnaire en dehors de la LGE. ",
+                "P40 et P100 exacts n'existent dans aucun jeu public vérifié.")),
+      if (!is.null(s$souris_dev)) p(class = "small text-muted", "Âges réels par fenêtre : ", s$souris_dev$meta$stage_note),
+      h5("Régulateurs des Rho GTPases"),
+      p("La liste « Régulateurs des Rho GTPases » (", nrow(RHO), " gènes) vient des familles officielles HGNC : Rho GTPases, GEF (familles Dbl et DOCK), ",
+        "GAP, GDI et myosines IX, avec l'orthologue souris (MGI). La carte de chaleur les range par famille."),
+      h5("Filtres"),
+      tags$ul(
+        tags$li(tags$b("Régions"), " : limite l'analyse aux régions choisies."),
+        tags$li(tags$b("Seulement les cellules qui expriment…"), " : garde les cellules où ce gène est détecté (ex. Pvalb). ",
+                "Le scRNA-seq ne détecte qu'une partie des ARN : ce filtre ne capture qu'une partie des vraies cellules positives. ",
+                "Le gène du filtre lui-même apparaît alors à 100 %.")),
       p(tags$a(href = VIDEO_URL, target = "_blank", "▶ Voir la vidéo de démonstration (2 min)")),
       h5("En trois étapes"),
       tags$ol(

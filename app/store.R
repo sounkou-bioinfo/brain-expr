@@ -78,11 +78,14 @@ match_genes <- function(store, symbols) {
 }
 
 # Reads the blocks of the genes present in the store; absent symbols are skipped.
+# A gene detected in no cell has an empty block and needs no read.
 read_genes <- function(store, genes) {
   rows <- store$key[toupper(genes)]
   rows <- rows[!is.na(rows)]
-  blocks <- lapply(rows, function(r)
-    decode_gene(store_range(store$src, store$genes$offset[r], store$genes$nbytes[r])))
+  blocks <- lapply(rows, function(r) {
+    if (store$genes$nbytes[r] == 0) return(list(cell = integer(), count = integer()))
+    decode_gene(store_range(store$src, store$genes$offset[r], store$genes$nbytes[r]))
+  })
   setNames(blocks, store$genes$gene[rows])
 }
 

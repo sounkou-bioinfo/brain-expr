@@ -3,6 +3,9 @@
 # stay as published; cryptic codes and abbreviations are spelled out.
 
 LEVEL_LABELS <- list(
+  souris_dev = c(Type = "Type cellulaire (harmonisé)", Region = "Région disséquée",
+                 Study = "Étude d'origine", Age = "Âge exact", Sorting = "Tri des cellules",
+                 Published = "Annotation publiée"),
   lamanno2021 = c(Class = "Classe cellulaire", Subclass = "Sous-classe (plus fin)",
                   Tissue = "Région disséquée"),
   zeisel2018 = c(TaxonomyRank3 = "Grande famille", TaxonomyRank4 = "Type cellulaire (plus fin)",
@@ -38,6 +41,7 @@ VALUE_LABELS <- list(
 )
 
 STAGE_LABELS <- list(
+  souris_dev = function(x) x,
   lamanno2021 = function(x) x,
   zeisel2018 = function(x) "P19–P23 (≈ 3 semaines après la naissance)",
   braun2023 = function(x) paste(sub(".", ",", sub(" pcw$", "", x), fixed = TRUE), "sem."),
@@ -49,6 +53,10 @@ STAGE_LABELS <- list(
 
 # Plain description of each atlas for the guide and the header.
 ATLAS_TEXT <- list(
+  souris_dev = list(
+    short = "Souris · E10.5 → adulte, par région",
+    what = "Prosencéphale de souris de E9 à l'âge adulte, réunissant 8 études : MGE, LGE, CGE, pallium, cortex somatosensoriel, hippocampe, striatum, amygdale. Les âges sont regroupés autour de E10.5, E12.5, E13.5, E15.5, P0, P10, P21, P40 et P100.",
+    stages = "« ≈ P40 » = âges réels les plus proches de P40 ; la liste exacte est dans le Guide et dans « Grouper par : Âge exact »."),
   lamanno2021 = list(
     short = "Souris · embryon E12.5–E13.5",
     what = "Cerveau de souris embryonnaire, disséqué par région, aux jours E12.5 et E13.5 : la période où la neurogenèse bat son plein.",

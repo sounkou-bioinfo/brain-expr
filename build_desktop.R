@@ -12,7 +12,7 @@
 args <- commandArgs(trailingOnly = TRUE)
 stores <- normalizePath(args[1], mustWork = TRUE)
 target <- if (length(args) > 1) args[2] else NULL
-atlases <- c("lamanno2021", "zeisel2018", "braun2023", "velmeshev2023")
+atlases <- c("souris_dev", "lamanno2021", "zeisel2018", "braun2023", "velmeshev2023")
 
 site <- file.path("build", "site")
 unlink(site, recursive = TRUE)

@@ -1,12 +1,13 @@
 # brain-expr : où et quand vos gènes sont exprimés dans le cerveau en développement
 
-Vous tapez une liste de gènes. L'app montre, pour chaque type cellulaire et
-chaque stade, le pourcentage de cellules qui expriment chaque gène, son niveau
-moyen et la coexpression de chaque paire. Elle couvre quatre atlas scRNA-seq,
-deux chez la souris et deux chez l'humain :
+Vous tapez une liste de gènes. L'app montre, pour chaque type cellulaire,
+chaque région et chaque stade, le pourcentage de cellules qui expriment chaque
+gène, son niveau moyen et la coexpression de chaque paire. Elle couvre cinq
+atlas scRNA-seq, trois chez la souris et deux chez l'humain :
 
 | Atlas | Espèce | Stades | Cellules dans l'app |
 |---|---|---|---|
+| **Souris · E10.5 → adulte, par région** (8 études, voir plus bas) | souris, prosencéphale | E9 → P132, regroupés autour de E10.5, E12.5, E13.5, E15.5, P0, P10, P21, P40, P100 | 87 447 (au plus 200 par étude × stade × région × type) |
 | La Manno et al. 2021, *Nature* | souris, cerveau | E12.5, E13.5 | 21 479 (toutes) |
 | Zeisel et al. 2018, *Cell* | souris, cerveau | P19–P23 | 64 170 (toutes) |
 | Braun et al. 2023, *Science* | humain, cerveau entier | 5–14 semaines post-conception | 30 996 (au plus 200 par stade × classe) |
@@ -14,13 +15,37 @@ deux chez la souris et deux chez l'humain :
 
 Tous les gènes de chaque atlas sont disponibles.
 
-**Vidéo de démonstration (2 min) :** <https://sounkou-bioinfo.github.io/brain-expr/walkthrough.mp4>
+L'atlas **Souris · E10.5 → adulte** suit le prosencéphale région par région :
+MGE, LGE et CGE disséquées séparément, pallium, cortex somatosensoriel,
+hippocampe, striatum et amygdale. Il réunit :
 
-![Vue d'ensemble : dix gènes d'épilepsie dans le cerveau de souris E12.5 et E13.5](docs/vue-ensemble.png)
+| Étude | Ce qu'elle apporte |
+|---|---|
+| La Manno et al. 2021, *Nature* | Prosencéphale dorsal et ventral, E9 → E18 |
+| Di Bella et al. 2021, *Nature* (GSE153162) | Cortex somatosensoriel, E10.5 → P4 |
+| Lee et al. 2022, *eLife* (GSE167013) | MGE, LGE, CGE et cortex disséqués séparément, E12.5 |
+| Mayer et al. 2018, *Nature* (GSE104156) | MGE Lhx6+ et CGE à E13.5, cortex et sous-cortex à E18.5 et P10 (cellules triées) |
+| Allaway et al. 2021, *Nature* (GSE164570) | Lignée Dlx6+ de la MGE à E13 jusqu'au cortex à P28 (cellules triées) |
+| Hochgerner et al. 2018, *Nat. Neurosci.* (GSE104323) | Gyrus denté, E16.5 → P132 |
+| Zeisel et al. 2018, *Cell* | Amygdale, striatum, hippocampe, cortex somatosensoriel, P18 → P30 et P60 |
+| Yao et al. 2023, *Nature* (Allen Brain Cell Atlas) | Striatum, amygdale (sAMY) et hippocampe adultes, P56 → P69 |
 
-![Au fil du développement : STXBP1 dans le cerveau humain, 5 à 14 semaines](docs/evolution.png)
+Chaque cellule y porte un **type cellulaire harmonisé**, attribué par la même
+règle de marqueurs dans toutes les études (`extract/celltypes.R`) :
+progéniteurs Nkx2-1+ de la MGE, neurones GABAergiques Dlx+, interneurones Lhx6+
+immatures, interneurones PV+ et SST+, neurones de projection du striatum,
+neurones excitateurs, astrocytes, lignée oligodendrocytaire, microglie et
+macrophages. L'annotation publiée par les auteurs reste disponible à côté.
 
-![Coexpression des mêmes gènes, neurones humains à 11,5 semaines](docs/coexpression.png)
+**Vidéo de démonstration (3 min) :** <https://sounkou-bioinfo.github.io/brain-expr/walkthrough.mp4>
+
+![Vue d'ensemble : Myo9b, Trio, Rhoa, Rac1 et Cdc42 dans les cellules Lhx6+ de la MGE et du cortex somatosensoriel](docs/vue-ensemble.png)
+
+![Carte de chaleur : les régulateurs des Rho GTPases, rangés par famille, de E10.5 à P0](docs/carte-rho.png)
+
+![Au fil du développement : Trio dans les cellules Lhx6+](docs/evolution.png)
+
+![Coexpression des cinq gènes dans les interneurones Lhx6+ vers E13.5](docs/coexpression.png)
 
 ## Utiliser l'app
 
@@ -36,12 +61,18 @@ Tous les gènes de chaque atlas sont disponibles.
 Dans l'app :
 
 1. Choisissez l'atlas.
-2. Collez vos gènes, séparés par des espaces, des virgules ou des retours à la
-   ligne, ou cliquez sur un exemple. La casse ne compte pas : `Pax6` trouve
-   `PAX6` chez l'humain. Les gènes absents de l'atlas sont signalés en rouge.
-3. Cliquez sur **Afficher**. Chaque onglet commence par un encadré « Comment
+2. Collez vos gènes (jusqu'à 200), séparés par des espaces, des virgules ou
+   des retours à la ligne, ou chargez une liste prête : les 159 régulateurs des
+   Rho GTPases (familles HGNC, avec l'orthologue souris MGI), une famille seule,
+   ou les marqueurs de la lignée des interneurones. La casse ne compte pas :
+   `Pax6` trouve `PAX6` chez l'humain. Les gènes absents de l'atlas sont
+   signalés en rouge.
+3. Affinez si besoin : choisissez des **régions**, ou ne gardez que les
+   **cellules qui expriment** un gène (par exemple `Pvalb` ou `Lhx6`).
+4. Cliquez sur **Afficher**. Chaque onglet commence par un encadré « Comment
    lire ce graphique » :
    - **Vue d'ensemble** : un point par gène et par groupe de cellules ;
+   - **Carte de chaleur** : toute la liste, rangée par famille de régulateurs Rho ;
    - **Au fil du développement** : un gène, stade par stade ;
    - **Coexpression** : deux gènes sont-ils dans les mêmes cellules ?
    - **Tableau** : les chiffres, à télécharger en CSV ;
@@ -83,7 +114,7 @@ Les atlas d'origine pèsent environ 47 Go. `extract/extract.R` les lit avec
 | `genes.tsv.gz` | position et taille du bloc de chaque gène dans `matrix.bin` |
 | `matrix.bin` | un bloc compressé par gène : cellules non nulles et comptes |
 
-Les quatre stores pèsent 254 Mo. L'app ne lit que les blocs des gènes demandés,
+Les cinq stores pèsent 442 Mo. L'app ne lit que les blocs des gènes demandés,
 par requêtes HTTP Range, avec `readBin()` et `memDecompress()` de R de base.
 Lire dix gènes prend environ une seconde.
 
@@ -103,8 +134,18 @@ Téléchargez les fichiers d'origine dans un dossier `data/` :
 Rscript extract/extract.R data stores          # ~5 min, écrit stores/<atlas>/
 ```
 
-Pour l'humain, l'échantillonnage (`CELLS_PER_GROUP`, `SEED`) se règle en tête de
-`extract/extract.R`.
+L'atlas `souris_dev` lit en plus les fichiers GEO des six autres études et
+l'atlas adulte Allen (environ 21 Go), que `extract/fetch_mouse_dev.sh`
+télécharge :
+
+```bash
+bash extract/fetch_mouse_dev.sh data            # GEO + Allen Brain Cell Atlas
+Rscript extract/mouse_dev.R data stores        # ~8 min, écrit stores/souris_dev/
+```
+
+L'échantillonnage (`CELLS_PER_GROUP` pour l'humain, `CAP` pour `souris_dev`) et
+la graine se règlent en tête de chaque script. Les marqueurs des types
+harmonisés sont dans `extract/celltypes.R`.
 
 ### Lancer, tester, construire
 
@@ -119,8 +160,8 @@ Rscript build_desktop.R stores linux                        # app de bureau : bu
 ### Publication
 
 Le workflow `.github/workflows/publish.yml` récupère les stores de la release
-[`data-v1`](https://github.com/sounkou-bioinfo/brain-expr/releases/tag/data-v1)
-et vérifie leur somme SHA-256. Il teste ensuite l'app sur les quatre atlas.
+[`data-v2`](https://github.com/sounkou-bioinfo/brain-expr/releases/tag/data-v2)
+et vérifie leur somme SHA-256. Il teste ensuite l'app sur les cinq atlas.
 
 - À chaque push sur `main`, il publie la version web sur GitHub Pages.
 - À chaque tag `v*`, il construit les apps Windows, macOS et Linux et les

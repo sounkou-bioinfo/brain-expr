@@ -3,3 +3,4 @@ stores/
 data/
 *.tar.gz
 .Rhistory
+__pycache__/
